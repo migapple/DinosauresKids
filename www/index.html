@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Dinosaures Kids</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --bg:#0D0A1A;--bg2:#14102A;--card:#1E1638;--card2:#261D45;
+  --orange:#FF7A1A;--amber:#FFB347;--gold:#FFD700;
+  --green:#4ADE80;--red:#FF5A5A;--blue:#60CBFF;
+  --text:#F0EAD6;--muted:rgba(240,234,214,0.5);
+  --fs:1
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+#app{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+
+/* Texture de fond */
+#app::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at 20% 20%,rgba(255,122,26,0.06) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(96,203,255,0.04) 0%,transparent 60%);pointer-events:none;z-index:0}
+
+.header{padding-top:calc(12px + env(safe-area-inset-top));padding-bottom:10px;background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:14px;border-bottom:1px solid rgba(255,122,26,0.25);z-index:10;position:relative}
+.header-title{font-family:'Georgia',serif;font-size:calc(19px * var(--fs));color:var(--orange);font-weight:bold;letter-spacing:0.5px}
+.header-btns{display:flex;gap:8px;align-items:center}
+.hbtn{background:rgba(255,122,26,0.12);border:1px solid rgba(255,122,26,0.25);border-radius:20px;padding:5px 11px;font-size:calc(17px * var(--fs));cursor:pointer;color:var(--orange)}
+
+.main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(60px + env(safe-area-inset-bottom));position:relative;z-index:1}
+.tabbar{position:fixed;bottom:0;left:0;right:0;height:calc(56px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg2);display:flex;border-top:1px solid rgba(255,122,26,0.2);z-index:100}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;opacity:0.4;transition:opacity .2s}
+.tab.active{opacity:1}
+.tab-icon{font-size:calc(21px * var(--fs))}
+.tab-label{font-size:calc(9px * var(--fs));color:var(--orange);text-transform:uppercase;letter-spacing:0.5px}
+
+/* GALERIE */
+.dino-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px}
+.dino-card{background:var(--card);border-radius:14px;overflow:hidden;border:1.5px solid transparent;transition:border-color .2s;position:relative;cursor:pointer}
+.dino-card.playing{border-color:var(--orange);animation:gpulse .8s ease}
+@keyframes gpulse{0%{box-shadow:0 0 0 0 rgba(255,122,26,0.5)}100%{box-shadow:0 0 0 12px rgba(255,122,26,0)}}
+.dino-img-wrap{width:100%;aspect-ratio:1;background:#0a0818;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
+.dino-img-wrap img{width:100%;height:100%;object-fit:cover}
+.dino-emoji{font-size:48px;line-height:1}
+.dino-card-name{text-align:center;padding:6px 3px;font-size:calc(10px * var(--fs));color:var(--text);font-weight:bold;pointer-events:none;line-height:1.2}
+.dino-regime{text-align:center;padding:0 3px 5px;font-size:calc(9px * var(--fs));color:var(--muted);pointer-events:none}
+
+/* BADGE époque */
+.epoch-badge{position:absolute;top:5px;left:5px;font-size:8px;padding:2px 5px;border-radius:8px;font-weight:bold;pointer-events:none}
+.epoch-trias{background:rgba(255,100,100,0.8);color:#fff}
+.epoch-jura{background:rgba(100,200,100,0.8);color:#fff}
+.epoch-creta{background:rgba(100,150,255,0.8);color:#fff}
+
+/* ZOOM */
+#zoomPanel{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:200;display:none;flex-direction:column;overflow:hidden}
+#zoomPanel.open{display:flex}
+.zoom-header{padding-top:calc(14px + env(safe-area-inset-top));padding-bottom:10px;padding-left:14px;padding-right:14px;background:var(--bg2);display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,122,26,0.2);flex-shrink:0}
+.zoom-back{font-size:24px;cursor:pointer;color:var(--orange);padding:2px 6px}
+.zoom-title{font-family:'Georgia',serif;font-size:calc(20px * var(--fs));color:var(--orange);flex:1}
+.zoom-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+.zoom-img-big{width:100%;height:200px;border-radius:14px;background:#0a0818;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden}
+.zoom-img-big img{width:100%;height:200px;object-fit:contain;border-radius:14px}
+.zoom-emoji-big{font-size:90px;line-height:1}
+.zoom-speak-btn{width:100%;padding:13px;background:var(--orange);border-radius:12px;border:none;font-size:calc(17px * var(--fs));font-weight:bold;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px}
+.zoom-speak-btn:active{opacity:0.8}
+.zoom-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.zbadge{padding:5px 12px;border-radius:20px;font-size:calc(11px * var(--fs));font-weight:bold}
+.zbadge-regime{background:rgba(255,122,26,0.2);color:var(--amber);border:1px solid rgba(255,122,26,0.3)}
+.zbadge-epoch{background:rgba(96,203,255,0.15);color:var(--blue);border:1px solid rgba(96,203,255,0.25)}
+.zbadge-size{background:rgba(74,222,128,0.15);color:var(--green);border:1px solid rgba(74,222,128,0.25)}
+.zoom-info{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:7px}
+.zrow{display:flex;gap:8px}
+.zlabel{color:var(--orange);font-size:calc(10px * var(--fs));font-weight:bold;text-transform:uppercase;min-width:72px}
+.zval{color:var(--text);font-size:calc(12px * var(--fs));flex:1;line-height:1.4}
+.zoom-bio{color:var(--muted);font-size:calc(12px * var(--fs));line-height:1.6;background:var(--card);border-radius:12px;padding:12px}
+.zoom-map{width:100%;height:180px;border-radius:12px;overflow:hidden;margin-bottom:12px}
+
+/* QUIZ */
+.quiz-wrap{padding:12px}
+.quiz-tabs{display:flex;gap:6px;margin-bottom:12px}
+.qtab{flex:1;padding:8px 4px;background:var(--card);border:1.5px solid transparent;border-radius:10px;color:var(--muted);font-size:calc(10px * var(--fs));text-align:center;cursor:pointer;font-weight:bold}
+.qtab.active{border-color:var(--orange);color:var(--orange);background:rgba(255,122,26,0.1)}
+.quiz-score{background:var(--card);border-radius:14px;padding:12px;display:flex;justify-content:space-around;margin-bottom:12px}
+.score-item{text-align:center}
+.score-num{font-size:calc(26px * var(--fs));color:var(--gold);font-weight:bold}
+.score-lab{font-size:calc(9px * var(--fs));color:var(--muted);text-transform:uppercase}
+.quiz-card{background:var(--card);border-radius:16px;padding:16px;text-align:center}
+.quiz-q{color:var(--amber);font-size:calc(14px * var(--fs));font-weight:bold;margin-bottom:14px;line-height:1.4}
+.quiz-img{width:140px;height:140px;border-radius:12px;background:#0a0818;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:72px}
+.quiz-img img{width:100%;height:100%;object-fit:contain}
+.quiz-choices-4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.quiz-choices-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qchoice{background:var(--card2);border:2px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 8px;cursor:pointer;font-size:calc(12px * var(--fs));color:var(--text);font-weight:bold;text-align:center;line-height:1.3;transition:border-color .15s}
+.qchoice.correct{border-color:var(--green);background:rgba(74,222,128,0.12);color:var(--green)}
+.qchoice.wrong{border-color:var(--red);background:rgba(255,90,90,0.1);color:var(--red)}
+.qchoice-img{width:100%;aspect-ratio:1;background:#0a0818;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:36px;margin-bottom:6px}
+.qchoice-img img{width:100%;height:100%;object-fit:contain}
+.quiz-next{width:100%;padding:13px;background:var(--orange);border-radius:12px;border:none;font-size:calc(15px * var(--fs));font-weight:bold;color:#fff;cursor:pointer;margin-top:12px}
+.qfb{margin-top:10px;font-size:20px;text-align:center;min-height:28px}
+
+/* CARTE */
+.map-wrap{padding:10px}
+.map-sel{width:100%;padding:10px;background:var(--card);border:1px solid rgba(255,122,26,0.3);border-radius:10px;color:var(--orange);font-size:calc(13px * var(--fs));margin-bottom:10px;-webkit-appearance:none}
+#mapLeaflet{width:100%;height:280px;border-radius:14px;overflow:hidden}
+.map-info{background:var(--card);border-radius:12px;padding:12px;margin-top:10px;color:var(--text);font-size:calc(12px * var(--fs));line-height:1.5}
+
+/* SETTINGS */
+.settings-wrap{padding:14px}
+.stitle{color:var(--orange);font-size:calc(12px * var(--fs));text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-weight:bold}
+.apps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.app-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.app-icon{width:58px;height:58px;border-radius:13px;background:var(--card);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:9px;color:var(--muted);text-align:center}
+.app-icon img{width:58px;height:58px;border-radius:13px;object-fit:cover}
+.app-name{font-size:9px;color:var(--muted);text-align:center;line-height:1.2;max-width:64px}
+.settings-badge{display:block;margin:0 auto;width:155px}
+
+.panel{display:none}.panel.active{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="header-title">🦕 Dinosaures Kids</div>
+    <div class="header-btns">
+      <div class="hbtn" id="langBtn">🇫🇷</div>
+    </div>
+  </div>
+  <div class="main">
+    <div id="tab-galerie" class="panel active">
+      <div class="dino-grid" id="dinoGrid"></div>
+    </div>
+    <div id="tab-quiz" class="panel">
+      <div class="quiz-wrap" id="quizWrap"></div>
+    </div>
+    <div id="tab-map" class="panel">
+      <div class="map-wrap">
+        <select class="map-sel" id="mapSel" onchange="showDinoMap()"></select>
+        <div id="mapLeaflet"></div>
+        <div class="map-info" id="mapInfo"></div>
+      </div>
+    </div>
+    <div id="tab-settings" class="panel">
+      <div class="settings-wrap" id="settingsWrap"></div>
+    </div>
+  </div>
+  <div class="tabbar">
+    <div class="tab active" id="tab-btn-galerie" onclick="switchTab('galerie')">
+      <div class="tab-icon">🦕</div>
+      <div class="tab-label" data-fr="Galerie" data-en="Gallery">Galerie</div>
+    </div>
+    <div class="tab" id="tab-btn-quiz" onclick="switchTab('quiz')">
+      <div class="tab-icon">🎯</div>
+      <div class="tab-label" data-fr="Quiz" data-en="Quiz">Quiz</div>
+    </div>
+    <div class="tab" id="tab-btn-map" onclick="switchTab('map')">
+      <div class="tab-icon">🗺️</div>
+      <div class="tab-label" data-fr="Carte" data-en="Map">Carte</div>
+    </div>
+    <div class="tab" id="tab-btn-settings" onclick="switchTab('settings')">
+      <div class="tab-icon">📱</div>
+      <div class="tab-label" data-fr="Applis" data-en="Apps">Applis</div>
+    </div>
+  </div>
+</div>
+
+<!-- ZOOM PANEL -->
+<div id="zoomPanel">
+  <div class="zoom-header">
+    <div class="zoom-back" id="zoomBack">←</div>
+    <div class="zoom-title" id="zoomTitle"></div>
+  </div>
+  <div class="zoom-body">
+    <div class="zoom-img-big" id="zoomImgWrap"></div>
+    <button class="zoom-speak-btn" id="zoomSpeakBtn">🔊 <span id="zoomSpeakTxt">Prononcer le nom</span></button>
+    <div class="zoom-badges" id="zoomBadges"></div>
+    <div class="zoom-info" id="zoomInfo"></div>
+    <div class="zoom-map" id="zoomMap"></div>
+    <div class="zoom-bio" id="zoomBio"></div>
+  </div>
+</div>
+
+<script>
+var LANG = localStorage.getItem('dino_lang') || 'fr';
+
+var DINOS = [
+  {id:'trex',       emoji:'🦖', fr:'T-Rex',            en:'T-Rex',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'12m / 8 tonnes',
+   bio_fr:'Le Tyrannosaurus Rex est le dinosaure carnivore le plus célèbre. Il avait des dents de 20 cm !',
+   bio_en:'The Tyrannosaurus Rex is the most famous carnivore. It had 20cm teeth!',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:46.0, lng:-105.0, zoom:4,
+   wf:'Tyrannosaurus_rex_mmartyniuk_wiki.png'},
+  {id:'triceratops', emoji:'🦕', fr:'Tricératops',      en:'Triceratops',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'9m / 12 tonnes',
+   bio_fr:'Le Tricératops avait trois cornes et une collerette osseuse. Il se défendait contre le T-Rex.',
+   bio_en:'The Triceratops had three horns and a bony frill. It defended itself against T-Rex.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:44.0, lng:-106.0, zoom:4,
+   wf:'Triceratops_lh_v2.png'},
+  {id:'diplodocus',  emoji:'🦕', fr:'Diplodocus',       en:'Diplodocus',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'27m / 15 tonnes',
+   bio_fr:'Le Diplodocus est l\'un des plus longs dinosaures. Son cou immense lui permettait d\'atteindre les arbres les plus hauts.',
+   bio_en:'The Diplodocus is one of the longest dinosaurs. Its huge neck allowed it to reach the tallest trees.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:40.0, lng:-110.0, zoom:4,
+   wf:'Diplodocus_Carnegie_Mellon.jpg'},
+  {id:'stegosaure',  emoji:'🦕', fr:'Stégosaure',       en:'Stegosaurus',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'9m / 5 tonnes',
+   bio_fr:'Le Stégosaure avait de grandes plaques osseuses sur le dos et une queue avec des pointes.',
+   bio_en:'The Stegosaurus had large bony plates on its back and a spiked tail.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:39.0, lng:-108.0, zoom:4,
+   wf:'Stegosaurus_stenops_Sophie.jpg'},
+  {id:'velociraptor', emoji:'🦖', fr:'Vélociraptor',    en:'Velociraptor',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'1.8m / 15 kg',
+   bio_fr:'Le Vélociraptor était petit mais très rapide et intelligent. Il chassait en meute.',
+   bio_en:'The Velociraptor was small but very fast and intelligent. It hunted in packs.',
+   lieu_fr:'Asie centrale', lieu_en:'Central Asia', lat:43.0, lng:95.0, zoom:4,
+   wf:'Velociraptor_dinoguy2.jpg'},
+  {id:'brachiosaure', emoji:'🦕', fr:'Brachiosaure',    en:'Brachiosaurus',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'26m / 60 tonnes',
+   bio_fr:'Le Brachiosaure était l\'un des plus lourds dinosaures. Il mangeait les feuilles des grands arbres.',
+   bio_en:'The Brachiosaurus was one of the heaviest dinosaurs. It ate leaves from tall trees.',
+   lieu_fr:'Afrique / Amérique', lieu_en:'Africa / America', lat:0.0, lng:25.0, zoom:3,
+   wf:'Brachiosaurus_DB.jpg'},
+  {id:'ankylosaure',  emoji:'🦕', fr:'Ankylosaure',     en:'Ankylosaurus',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'10m / 6 tonnes',
+   bio_fr:'L\'Ankylosaure était recouvert d\'une armure osseuse et avait une massue au bout de la queue.',
+   bio_en:'The Ankylosaurus was covered in bony armor and had a club at the end of its tail.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:50.0, lng:-112.0, zoom:4,
+   wf:'Ankylosaurus_magniventris_BW.jpg'},
+  {id:'pteranodon',   emoji:'🦅', fr:'Ptéranodon',      en:'Pteranodon',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'Envergure 9m',
+   bio_fr:'Le Ptéranodon était un reptile volant, pas vraiment un dinosaure. Il pêchait en rasant la mer.',
+   bio_en:'The Pteranodon was a flying reptile, not really a dinosaur. It fished over the sea.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:38.0, lng:-100.0, zoom:4,
+   wf:'Pteranodon_BW.jpg'},
+  {id:'spinosaure',   emoji:'🦖', fr:'Spinosaure',      en:'Spinosaurus',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'15m / 20 tonnes',
+   bio_fr:'Le Spinosaure était plus grand que le T-Rex. Il avait une grande voile sur le dos et mangeait des poissons.',
+   bio_en:'The Spinosaurus was bigger than T-Rex. It had a large sail on its back and ate fish.',
+   lieu_fr:'Afrique du Nord', lieu_en:'North Africa', lat:28.0, lng:10.0, zoom:4,
+   wf:'Spinosaurus_BW_old.jpg'},
+  {id:'parasaurolophus', emoji:'🦕', fr:'Parasaurolophus', en:'Parasaurolophus',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'9.5m / 2.5 tonnes',
+   bio_fr:'Le Parasaurolophus avait une longue crête creuse sur la tête qui lui servait à communiquer par sons.',
+   bio_en:'The Parasaurolophus had a long hollow crest on its head used to communicate with sounds.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:48.0, lng:-113.0, zoom:4,
+   wf:'Parasaurolophus_BW.jpg'},
+  {id:'allosaure',    emoji:'🦖', fr:'Allosaure',       en:'Allosaurus',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'12m / 2 tonnes',
+   bio_fr:'L\'Allosaure était le grand prédateur du Jurassique, avant le T-Rex. Il chassait en groupe.',
+   bio_en:'The Allosaurus was the great Jurassic predator, before T-Rex. It hunted in groups.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:39.0, lng:-109.0, zoom:4,
+   wf:'Allosaurus_Revised.jpg'},
+  {id:'iguanodon',    emoji:'🦕', fr:'Iguanodon',       en:'Iguanodon',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'10m / 3 tonnes',
+   bio_fr:'L\'Iguanodon était l\'un des premiers dinosaures découverts. Il avait un pouce en forme de pointe.',
+   bio_en:'The Iguanodon was one of the first dinosaurs discovered. It had a spike-shaped thumb.',
+   lieu_fr:'Europe', lieu_en:'Europe', lat:51.0, lng:3.0, zoom:5,
+   wf:'Iguanodon_BW_2.jpg'},
+  {id:'archaeopteryx', emoji:'🐦', fr:'Archaeopteryx',  en:'Archaeopteryx',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'50cm / 1 kg',
+   bio_fr:'L\'Archaeopteryx est le chaînon entre les dinosaures et les oiseaux. Il avait des plumes et des dents.',
+   bio_en:'The Archaeopteryx is the link between dinosaurs and birds. It had feathers and teeth.',
+   lieu_fr:'Europe (Allemagne)', lieu_en:'Europe (Germany)', lat:48.5, lng:11.0, zoom:5,
+   wf:'Archaeopteryx_lithographica_(Berlin_specimen).jpg'},
+  {id:'carnotaurus',  emoji:'🦖', fr:'Carnotaurus',     en:'Carnotaurus',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'8m / 1.5 tonnes',
+   bio_fr:'Le Carnotaurus avait deux petites cornes sur la tête. C\'était l\'un des dinosaures les plus rapides.',
+   bio_en:'The Carnotaurus had two small horns on its head. It was one of the fastest dinosaurs.',
+   lieu_fr:'Amérique du Sud', lieu_en:'South America', lat:-40.0, lng:-65.0, zoom:4,
+   wf:'Carnotaurus_BW.jpg'},
+  {id:'dilophosaure', emoji:'🦖', fr:'Dilophosaure',    en:'Dilophosaurus',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'6m / 400 kg',
+   bio_fr:'Le Dilophosaure avait deux crêtes parallèles sur le crâne. Il vivait au début du Jurassique.',
+   bio_en:'The Dilophosaurus had two parallel crests on its skull. It lived in the early Jurassic.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:37.0, lng:-111.0, zoom:5,
+   wf:'Dilophosaurus_wetherilli_(flipped).jpg'},
+  {id:'microraptor',  emoji:'🐦', fr:'Microraptor',     en:'Microraptor',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'60cm / 1 kg',
+   bio_fr:'Le Microraptor était minuscule et pouvait planer entre les arbres grâce à ses quatre ailes.',
+   bio_en:'The Microraptor was tiny and could glide between trees with its four wings.',
+   lieu_fr:'Asie (Chine)', lieu_en:'Asia (China)', lat:41.0, lng:120.0, zoom:5,
+   wf:'Microraptor_gui_holotype.jpg'},
+  {id:'plesiosaure',  emoji:'🐋', fr:'Plésiosaure',     en:'Plesiosaur',
+   regime_fr:'Carnivore',  regime_en:'Carnivore',
+   epoque_fr:'Jurassique', epoque_en:'Jurassic',    epoque:'jura',
+   taille:'3-14m selon espèce',
+   bio_fr:'Le Plésiosaure vivait dans les mers préhistoriques. Certains pensent qu\'il ressemble au monstre du Loch Ness !',
+   bio_en:'The Plesiosaur lived in prehistoric seas. Some think it resembles the Loch Ness monster!',
+   lieu_fr:'Océans du monde', lieu_en:'World oceans', lat:0.0, lng:0.0, zoom:2,
+   wf:'Plesiosaurus_BW.jpg'},
+  {id:'gallimimus',   emoji:'🦕', fr:'Gallimimus',      en:'Gallimimus',
+   regime_fr:'Omnivore',   regime_en:'Omnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'6m / 440 kg',
+   bio_fr:'Le Gallimimus ressemblait à une autruche géante. C\'était l\'un des dinosaures les plus rapides.',
+   bio_en:'The Gallimimus looked like a giant ostrich. It was one of the fastest dinosaurs.',
+   lieu_fr:'Asie (Mongolie)', lieu_en:'Asia (Mongolia)', lat:45.0, lng:105.0, zoom:4,
+   wf:'Gallimimus_BW.jpg'},
+  {id:'pachycephalosaure', emoji:'🦕', fr:'Pachycéphalosaure', en:'Pachycephalosaurus',
+   regime_fr:'Herbivore',  regime_en:'Herbivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'4.5m / 400 kg',
+   bio_fr:'Le Pachycéphalosaure avait un crâne épais de 25 cm. Il se battait en fonçant tête baissée.',
+   bio_en:'The Pachycephalosaurus had a 25cm thick skull. It fought by head-butting.',
+   lieu_fr:'Amérique du Nord', lieu_en:'North America', lat:47.0, lng:-107.0, zoom:4,
+   wf:'Pachycephalosaurus_BW.jpg'},
+  {id:'oviraptor',    emoji:'🦖', fr:'Oviraptor',       en:'Oviraptor',
+   regime_fr:'Omnivore',   regime_en:'Omnivore',
+   epoque_fr:'Crétacé',   epoque_en:'Cretaceous',  epoque:'creta',
+   taille:'1.8m / 35 kg',
+   bio_fr:'L\'Oviraptor était un dinosaure à plumes qui couvait ses œufs comme un oiseau moderne.',
+   bio_en:'The Oviraptor was a feathered dinosaur that brooded its eggs like a modern bird.',
+   lieu_fr:'Asie (Mongolie)', lieu_en:'Asia (Mongolia)', lat:44.0, lng:108.0, zoom:4,
+   wf:'Oviraptor_Reconstruction.jpg'}
+];
+
+var APPS = [
+  {id:6772937635, name:'Animaux Kids'},
+  {id:6772548541, name:'Lettres Kids'},
+  {id:6772546976, name:'Chiffres Kids'},
+  {id:6772468506, name:'Mahjong Kids'}
+];
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function nameOf(d){ return LANG==='fr'?d.fr:d.en; }
+function regimeOf(d){ return LANG==='fr'?d.regime_fr:d.regime_en; }
+function epoqueOf(d){ return LANG==='fr'?d.epoque_fr:d.epoque_en; }
+function lieuOf(d){ return LANG==='fr'?d.lieu_fr:d.lieu_en; }
+function bioOf(d){ return LANG==='fr'?d.bio_fr:d.bio_en; }
+
+function epochClass(e){ return 'epoch-'+e; }
+
+function toggleLang(){
+  LANG = LANG==='fr'?'en':'fr';
+  localStorage.setItem('dino_lang', LANG);
+  document.getElementById('langBtn').textContent = LANG==='fr'?'🇫🇷':'🇬🇧';
+  document.querySelectorAll('[data-fr]').forEach(function(el){
+    el.textContent = LANG==='fr'?el.getAttribute('data-fr'):el.getAttribute('data-en');
+  });
+  renderGalerie();
+  if(document.getElementById('tab-quiz').classList.contains('active')) renderQuiz();
+  if(document.getElementById('tab-map').classList.contains('active')) renderMapTab();
+}
+
+// ─── SPEECH ──────────────────────────────────────────────────────────────────
+var _spk = false;
+function speakName(name){
+  if(_spk) return;
+  if(!window.speechSynthesis) return;
+  _spk = true;
+  window.speechSynthesis.cancel();
+  var u = new SpeechSynthesisUtterance(name);
+  u.lang = LANG==='fr'?'fr-FR':'en-GB';
+  u.rate = 0.8; u.pitch = 1.0;
+  u.onend = function(){ _spk=false; };
+  u.onerror = function(){ _spk=false; };
+  try{ window.speechSynthesis.speak(u); } catch(e){ _spk=false; }
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+var _toastT = null;
+function showToast(name){
+  var t = document.getElementById('nameToast');
+  if(!t) return;
+  t.textContent = name;
+  t.classList.add('show');
+  if(_toastT) clearTimeout(_toastT);
+  _toastT = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+
+// ─── IMAGES ──────────────────────────────────────────────────────────────────
+var thumbCache = {}, urlCache = {};
+
+function loadThumb(d){
+  if(thumbCache[d.id]){ setThumbImg(d.id, thumbCache[d.id]); return; }
+  if(typeof CapacitorHttp==='undefined') return;
+  CapacitorHttp.get({
+    url:'https://fr.wikipedia.org/w/api.php?action=query&titles=File:'+encodeURIComponent(d.wf)+'&prop=pageimages&pithumbsize=300&format=json',
+    headers:{}
+  }).then(function(r){
+    var data = typeof r.data==='string'?JSON.parse(r.data):r.data;
+    var pages = data.query&&data.query.pages;
+    if(!pages) return;
+    var page = Object.values(pages)[0];
+    var url = page.thumbnail&&page.thumbnail.source;
+    if(url){ thumbCache[d.id]=url; setThumbImg(d.id,url); }
+  }).catch(function(){});
+}
+
+function setThumbImg(id, url){
+  var wrap = document.getElementById('imgwrap-'+id);
+  if(!wrap) return;
+  var img = new Image();
+  img.onload = function(){ wrap.innerHTML=''; wrap.appendChild(img); };
+  img.style.cssText='width:100%;height:100%;object-fit:cover';
+  img.src = url;
+}
+
+function loadDetail(d){
+  if(urlCache[d.id]){ applyDetailImg(d.id, urlCache[d.id]); return; }
+  if(typeof CapacitorHttp==='undefined') return;
+  CapacitorHttp.get({
+    url:'https://fr.wikipedia.org/w/api.php?action=query&titles=File:'+encodeURIComponent(d.wf)+'&prop=pageimages&pithumbsize=600&format=json',
+    headers:{}
+  }).then(function(r){
+    var data = typeof r.data==='string'?JSON.parse(r.data):r.data;
+    var pages = data.query&&data.query.pages;
+    if(!pages) return;
+    var page = Object.values(pages)[0];
+    var url = page.thumbnail&&page.thumbnail.source;
+    if(url){ urlCache[d.id]=url; applyDetailImg(d.id, url); }
+  }).catch(function(){});
+}
+
+function applyDetailImg(id, url){
+  var wrap = document.getElementById('zoomImgWrap');
+  if(!wrap) return;
+  wrap.innerHTML='<img src="'+url+'">';
+}
+
+// ─── GALERIE ─────────────────────────────────────────────────────────────────
+function renderGalerie(){
+  var g = document.getElementById('dinoGrid');
+  g.innerHTML = '';
+  DINOS.forEach(function(d){
+    (function(dino){
+      var card = document.createElement('div');
+      card.className = 'dino-card';
+      card.id = 'card-'+dino.id;
+      card.innerHTML =
+        '<span class="epoch-badge '+epochClass(dino.epoque)+'">'+epoqueOf(dino).substring(0,4)+'</span>'+
+        '<div class="dino-img-wrap" id="imgwrap-'+dino.id+'"><div class="dino-emoji">'+dino.emoji+'</div></div>'+
+        '<div class="dino-card-name">'+nameOf(dino)+'</div>'+
+        '<div class="dino-regime">'+regimeOf(dino)+'</div>';
+
+      var imgWrap = card.querySelector('.dino-img-wrap');
+      imgWrap.style.cursor = 'pointer';
+      imgWrap.addEventListener('touchend', function(e){
+        e.preventDefault(); e.stopPropagation();
+        openZoom(dino);
+      });
+      imgWrap.addEventListener('click', function(e){
+        e.stopPropagation();
+        openZoom(dino);
+      });
+      g.appendChild(card);
+      loadThumb(dino);
+    })(d);
+  });
+}
+
+// ─── ZOOM ────────────────────────────────────────────────────────────────────
+var currentDino = null, zoomMap = null;
+
+function openZoom(d){
+  currentDino = d;
+  document.getElementById('zoomPanel').classList.add('open');
+  document.getElementById('zoomTitle').textContent = nameOf(d);
+  document.getElementById('zoomSpeakTxt').textContent = LANG==='fr'?'Prononcer le nom':'Say the name';
+  speakName(nameOf(d));
+
+  var wrap = document.getElementById('zoomImgWrap');
+  if(thumbCache[d.id]){
+    wrap.innerHTML='<img src="'+thumbCache[d.id]+'">';
+  } else {
+    wrap.innerHTML='<div class="zoom-emoji-big">'+d.emoji+'</div>';
+  }
+  loadDetail(d);
+
+  document.getElementById('zoomBadges').innerHTML =
+    '<span class="zbadge zbadge-regime">'+regimeOf(d)+'</span>'+
+    '<span class="zbadge zbadge-epoch">'+epoqueOf(d)+'</span>'+
+    '<span class="zbadge zbadge-size">'+d.taille+'</span>';
+
+  document.getElementById('zoomInfo').innerHTML =
+    '<div class="zrow"><span class="zlabel">'+(LANG==='fr'?'Lieu':'Location')+'</span><span class="zval">'+lieuOf(d)+'</span></div>'+
+    '<div class="zrow"><span class="zlabel">'+(LANG==='fr'?'Taille':'Size')+'</span><span class="zval">'+d.taille+'</span></div>'+
+    '<div class="zrow"><span class="zlabel">'+(LANG==='fr'?'Régime':'Diet')+'</span><span class="zval">'+regimeOf(d)+'</span></div>';
+
+  document.getElementById('zoomBio').textContent = bioOf(d);
+
+  var mapDiv = document.getElementById('zoomMap');
+  mapDiv.innerHTML = '';
+  if(zoomMap){ zoomMap.remove(); zoomMap=null; }
+  setTimeout(function(){
+    zoomMap = L.map(mapDiv,{zoomControl:false,attributionControl:false}).setView([d.lat,d.lng],d.zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(zoomMap);
+    L.marker([d.lat,d.lng]).bindPopup(nameOf(d)).openPopup().addTo(zoomMap);
+  }, 100);
+}
+
+function closeZoom(){
+  document.getElementById('zoomPanel').classList.remove('open');
+  if(zoomMap){ zoomMap.remove(); zoomMap=null; }
+  currentDino = null;
+}
+
+// ─── QUIZ ────────────────────────────────────────────────────────────────────
+var quizMode = 'nom', quizScore = {ok:0, total:0}, quizCurrent = null, quizAnswered = false;
+
+function renderQuiz(){
+  var w = document.getElementById('quizWrap');
+  var scoreHtml = '<div class="quiz-score">'+
+    '<div class="score-item"><div class="score-num">'+quizScore.ok+'</div><div class="score-lab">'+(LANG==='fr'?'Bons':'Right')+'</div></div>'+
+    '<div class="score-item"><div class="score-num">'+quizScore.total+'</div><div class="score-lab">'+(LANG==='fr'?'Joués':'Played')+'</div></div>'+
+    '<div class="score-item"><div class="score-num">'+(quizScore.total>0?Math.round(100*quizScore.ok/quizScore.total):0)+'%</div><div class="score-lab">Score</div></div>'+
+  '</div>';
+
+  var tabHtml =
+    '<div class="quiz-tabs">'+
+    '<div class="qtab'+(quizMode==='nom'?' active':'')+'" onclick="setQuizMode(\'nom\')">'+(LANG==='fr'?'Quel dino ?':'Which dino?')+'</div>'+
+    '<div class="qtab'+(quizMode==='regime'?' active':'')+'" onclick="setQuizMode(\'regime\')">'+(LANG==='fr'?'Carnivore ?':'Carnivore?')+'</div>'+
+    '<div class="qtab'+(quizMode==='epoque'?' active':'')+'" onclick="setQuizMode(\'epoque\')">'+(LANG==='fr'?'Époque ?':'Era?')+'</div>'+
+    '</div>';
+
+  quizCurrent = DINOS[Math.floor(Math.random()*DINOS.length)];
+  quizAnswered = false;
+
+  var cardHtml = '';
+  var img = thumbCache[quizCurrent.id]?'<img src="'+thumbCache[quizCurrent.id]+'">':'<span style="font-size:64px">'+quizCurrent.emoji+'</span>';
+
+  if(quizMode==='nom'){
+    var others = DINOS.filter(function(x){return x.id!==quizCurrent.id;});
+    others.sort(function(){return Math.random()-0.5;});
+    var choices = [quizCurrent,others[0],others[1],others[2]];
+    choices.sort(function(){return Math.random()-0.5;});
+    var choicesHtml = choices.map(function(d){
+      return '<div class="qchoice" id="qc-'+d.id+'" onclick="quizAnswer(\''+d.id+'\',\''+quizCurrent.id+'\')">'+nameOf(d)+'</div>';
+    }).join('');
+    cardHtml = '<div class="quiz-card">'+
+      '<div class="quiz-q">'+(LANG==='fr'?'Quel est ce dinosaure ?':'Which dinosaur is this?')+'</div>'+
+      '<div class="quiz-img">'+img+'</div>'+
+      '<div class="quiz-choices-4">'+choicesHtml+'</div>'+
+      '<div class="qfb" id="qfb"></div></div>';
+
+  } else if(quizMode==='regime'){
+    var r1 = regimeOf({regime_fr:'Carnivore',regime_en:'Carnivore'});
+    var r2 = regimeOf({regime_fr:'Herbivore',regime_en:'Herbivore'});
+    var r3 = regimeOf({regime_fr:'Omnivore',regime_en:'Omnivore'});
+    var regimes = [...new Set(DINOS.map(function(d){return regimeOf(d);}))];
+    var choicesHtml = regimes.map(function(r){
+      return '<div class="qchoice" id="qcr-'+r+'" onclick="quizAnswerRegime(\''+r+'\')">'+r+'</div>';
+    }).join('');
+    cardHtml = '<div class="quiz-card">'+
+      '<div class="quiz-q">'+(LANG==='fr'?''+nameOf(quizCurrent)+' est...?':nameOf(quizCurrent)+' is...?')+'</div>'+
+      '<div class="quiz-img">'+img+'</div>'+
+      '<div class="quiz-choices-2">'+choicesHtml+'</div>'+
+      '<div class="qfb" id="qfb"></div></div>';
+
+  } else {
+    var epoques = ['Trias','Jurassique','Crétacé'];
+    if(LANG==='en') epoques = ['Triassic','Jurassic','Cretaceous'];
+    var choicesHtml = epoques.map(function(ep){
+      return '<div class="qchoice" id="qce-'+ep+'" onclick="quizAnswerEpoque(\''+ep+'\')">'+ep+'</div>';
+    }).join('');
+    cardHtml = '<div class="quiz-card">'+
+      '<div class="quiz-q">'+(LANG==='fr'?'À quelle époque vivait '+nameOf(quizCurrent)+' ?':'When did '+nameOf(quizCurrent)+' live?')+'</div>'+
+      '<div class="quiz-img">'+img+'</div>'+
+      '<div class="quiz-choices-2">'+choicesHtml+'</div>'+
+      '<div class="qfb" id="qfb"></div></div>';
+  }
+
+  w.innerHTML = tabHtml + scoreHtml + cardHtml;
+}
+
+function setQuizMode(mode){
+  quizMode = mode;
+  quizScore = {ok:0, total:0};
+  renderQuiz();
+}
+
+function quizAnswer(id, correctId){
+  if(quizAnswered) return;
+  quizAnswered = true;
+  quizScore.total++;
+  var ok = id===correctId;
+  if(ok) quizScore.ok++;
+  var el = document.getElementById('qc-'+id);
+  if(el) el.classList.add(ok?'correct':'wrong');
+  if(!ok){ var cel = document.getElementById('qc-'+correctId); if(cel) cel.classList.add('correct'); }
+  document.getElementById('qfb').innerHTML =
+    (ok?'<span style="color:var(--green);font-size:26px">✓ '+(LANG==='fr'?'Bravo !':'Well done!')+'</span>':
+       '<span style="color:var(--red)">✗ '+nameOf(quizCurrent)+'</span>')+
+    '<br><button class="quiz-next" onclick="renderQuiz()">'+(LANG==='fr'?'Suivant →':'Next →')+'</button>';
+}
+
+function quizAnswerRegime(r){
+  if(quizAnswered) return;
+  quizAnswered = true;
+  quizScore.total++;
+  var correct = regimeOf(quizCurrent);
+  var ok = r===correct;
+  if(ok) quizScore.ok++;
+  document.querySelectorAll('[id^="qcr-"]').forEach(function(el){
+    if(el.id==='qcr-'+correct) el.classList.add('correct');
+    else if(el.id==='qcr-'+r && !ok) el.classList.add('wrong');
+  });
+  document.getElementById('qfb').innerHTML =
+    (ok?'<span style="color:var(--green);font-size:26px">✓ '+(LANG==='fr'?'Bravo !':'Well done!')+'</span>':
+       '<span style="color:var(--red)">✗ '+correct+'</span>')+
+    '<br><button class="quiz-next" onclick="renderQuiz()">'+(LANG==='fr'?'Suivant →':'Next →')+'</button>';
+}
+
+function quizAnswerEpoque(ep){
+  if(quizAnswered) return;
+  quizAnswered = true;
+  quizScore.total++;
+  var correct = epoqueOf(quizCurrent);
+  var ok = ep===correct;
+  if(ok) quizScore.ok++;
+  document.querySelectorAll('[id^="qce-"]').forEach(function(el){
+    if(el.id==='qce-'+correct) el.classList.add('correct');
+    else if(el.id==='qce-'+ep && !ok) el.classList.add('wrong');
+  });
+  document.getElementById('qfb').innerHTML =
+    (ok?'<span style="color:var(--green);font-size:26px">✓ '+(LANG==='fr'?'Bravo !':'Well done!')+'</span>':
+       '<span style="color:var(--red)">✗ '+correct+'</span>')+
+    '<br><button class="quiz-next" onclick="renderQuiz()">'+(LANG==='fr'?'Suivant →':'Next →')+'</button>';
+}
+
+// ─── CARTE ───────────────────────────────────────────────────────────────────
+var mapLeaflet = null;
+function renderMapTab(){
+  var sel = document.getElementById('mapSel');
+  sel.innerHTML = DINOS.map(function(d){return '<option value="'+d.id+'">'+d.emoji+' '+nameOf(d)+'</option>';}).join('');
+  showDinoMap();
+}
+function showDinoMap(){
+  var id = document.getElementById('mapSel').value;
+  var d = DINOS.find(function(x){return x.id===id;});
+  if(!d) return;
+  if(!mapLeaflet){
+    mapLeaflet = L.map('mapLeaflet',{zoomControl:true,attributionControl:false}).setView([d.lat,d.lng],d.zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapLeaflet);
+  } else {
+    mapLeaflet.setView([d.lat,d.lng],d.zoom);
+    mapLeaflet.eachLayer(function(l){ if(l instanceof L.Marker) mapLeaflet.removeLayer(l); });
+  }
+  L.marker([d.lat,d.lng]).bindPopup(nameOf(d)+' '+d.emoji).openPopup().addTo(mapLeaflet);
+  document.getElementById('mapInfo').innerHTML =
+    '<strong style="color:var(--orange)">'+nameOf(d)+'</strong> — '+epoqueOf(d)+'<br>'+
+    '<span style="color:var(--muted)">'+lieuOf(d)+'</span><br>'+
+    bioOf(d);
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+function renderSettings(){
+  var w = document.getElementById('settingsWrap');
+  w.innerHTML = '<div class="stitle">'+(LANG==='fr'?'Autres applications':'Other apps')+'</div>'+
+    '<div class="apps-grid" id="appsGrid"></div>'+
+    '<a href="https://apps.apple.com/developer/michel-garlandat/id368771203" target="_blank">'+
+    '<img class="settings-badge" src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/fr-fr" alt="App Store"></a>';
+  var grid = document.getElementById('appsGrid');
+  APPS.forEach(function(app){
+    var item = document.createElement('div');
+    item.className = 'app-item';
+    var img = document.createElement('img');
+    img.style.cssText = 'width:58px;height:58px;border-radius:13px;object-fit:cover';
+    var iconDiv = document.createElement('div');
+    iconDiv.className = 'app-icon';
+    iconDiv.appendChild(img);
+    var nameDiv = document.createElement('div');
+    nameDiv.className = 'app-name';
+    nameDiv.textContent = app.name;
+    item.appendChild(iconDiv);
+    item.appendChild(nameDiv);
+    item.onclick = function(){ window.open('https://apps.apple.com/app/id'+app.id,'_blank'); };
+    grid.appendChild(item);
+    var cb = 'itcb'+app.id;
+    window[cb] = function(d){ if(d.results&&d.results[0]) img.src = d.results[0].artworkUrl60; };
+    var s = document.createElement('script');
+    s.src = 'https://itunes.apple.com/lookup?id='+app.id+'&callback='+cb;
+    document.body.appendChild(s);
+  });
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+var mapDone = false;
+function switchTab(name){
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  document.getElementById('tab-'+name).classList.add('active');
+  document.getElementById('tab-btn-'+name).classList.add('active');
+  if(name==='quiz') renderQuiz();
+  if(name==='map'&&!mapDone){ mapDone=true; setTimeout(renderMapTab,200); }
+  if(name==='settings') renderSettings();
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('langBtn').textContent = LANG==='fr'?'🇫🇷':'🇬🇧';
+  document.getElementById('langBtn').addEventListener('touchend',function(e){ e.preventDefault(); toggleLang(); });
+  document.getElementById('langBtn').addEventListener('click', toggleLang);
+
+  document.getElementById('zoomBack').addEventListener('touchend',function(e){ e.preventDefault(); closeZoom(); });
+  document.getElementById('zoomBack').addEventListener('click', closeZoom);
+
+  document.getElementById('zoomSpeakBtn').addEventListener('touchend',function(e){
+    e.preventDefault(); e.stopPropagation();
+    if(currentDino){ _spk=false; speakName(nameOf(currentDino)); }
+  });
+  document.getElementById('zoomSpeakBtn').addEventListener('click',function(){
+    if(currentDino){ _spk=false; speakName(nameOf(currentDino)); }
+  });
+
+  renderGalerie();
+});
+</script>
+</body>
+</html>
